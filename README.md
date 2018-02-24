@@ -1,4 +1,4 @@
-#JNN - Java Neural Network
+# JNN - Java Neural Network
 
 Hello! jnn is a neural network library for Java to make neural networks available to everyone, educators and beginners.
 
