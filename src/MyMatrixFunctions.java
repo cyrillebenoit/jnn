@@ -1,6 +1,6 @@
 import org.jblas.DoubleMatrix;
 
-class MatrixFunctions {
+class MyMatrixFunctions {
 
     /**
      * Applies the <i>sigmoid</i> function element wise on this

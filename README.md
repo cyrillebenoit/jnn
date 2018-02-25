@@ -4,5 +4,5 @@ Hello! jnn is a neural network library for Java to make neural networks availabl
 
 The library currently only supports fully-connected multilayer perceptron network, with stochastic gradient descent. More machine learning algorithms will be added throughout the development of the library.
 
-## Dependancies
+## Dependencies
 The library only depends on [jblas](http://jblas.org) for linear algebra.
