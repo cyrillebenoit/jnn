@@ -24,10 +24,9 @@ public class NeuralNetwork {
         this.inputs = inputs;
         this.hidden = hidden;
         this.outputs = outputs;
-        this.matrices = new DoubleMatrix[hiddenLayers + 1];
         this.activations = new DoubleMatrix[hiddenLayers + 2];
         this.learningRate = 1;
-        this.initializeRandomMatrix();
+        this.matrices = this.initializeRandomMatrix(hiddenLayers + 1);
     }
 
     /**
@@ -38,17 +37,6 @@ public class NeuralNetwork {
     public void setLearningRate(double learningRate) {
         if (learningRate > 0)
             this.learningRate = learningRate;
-    }
-
-    /**
-     * This function initializes the weights and biases to random values.
-     */
-    private void initializeRandomMatrix() {
-        this.matrices[0] = DoubleMatrix.rand(this.hidden, this.inputs + 1);
-        for (int pointer = 1; pointer < this.matrices.length - 1; pointer++) {
-            this.matrices[pointer] = DoubleMatrix.rand(this.hidden, this.hidden + 1);
-        }
-        this.matrices[this.matrices.length - 1] = DoubleMatrix.rand(this.outputs, this.hidden + 1);
     }
 
     /**
@@ -68,23 +56,103 @@ public class NeuralNetwork {
      * @throws NeuralNetworkException if inputs are not of the right length.
      */
     public double[] guess(double[] inputs) throws NeuralNetworkException {
-        if (inputs.length != this.inputs)
-            throw new NeuralNetworkException("Wrong inputs length.");
-        DoubleMatrix res = new DoubleMatrix(inputs);
-        return guess(res).toArray();
+        DoubleMatrix inputMatrix = new DoubleMatrix(inputs);
+        this.checkInput(inputMatrix);
+        return guess(inputMatrix).toArray();
     }
 
+    /**
+     * This function is used to train the neural network for one single element. The gradient descent is done immediately.
+     *
+     * @param trainingData TrainingData object
+     * @throws NeuralNetworkException if the Training Data is invalid for this neural network.
+     */
+    public void simpleTrain(TrainingData trainingData) throws NeuralNetworkException {
+        checkTrainingData(trainingData);
+        DoubleMatrix[] changes = this.train(trainingData.getInputs(), trainingData.getExpected());
+        saveGradientDescent(changes);
+    }
+
+    /**
+     * This function is used to train the neural network for a mini batch of elements.
+     * The gradient descent is done for the mean of all individual gradient descent.
+     *
+     * @param trainingDatum Array of TrainingData object
+     * @throws NeuralNetworkException if the Training Data is invalid for this neural network.
+     */
+    public void batchTrain(TrainingData[] trainingDatum) throws NeuralNetworkException {
+        checkTrainingDatum(trainingDatum);
+        DoubleMatrix[] batchGradientDescent = this.initializeZeroMatrix(this.matrices.length);
+        for (TrainingData trainingData : trainingDatum) {
+            DoubleMatrix[] partialGradientDescent = this.train(trainingData.getInputs(), trainingData.getExpected());
+            for (int i = 0; i < batchGradientDescent.length; i++) {
+                batchGradientDescent[i].addi(partialGradientDescent[i].div(trainingDatum.length));
+            }
+        }
+        saveGradientDescent(batchGradientDescent);
+    }
+
+    //TODO stochastic mini batch training
+
+    /**
+     * This function returns a clone of the calling object.
+     */
+    public NeuralNetwork clone() {
+        return new NeuralNetwork(this.inputs, this.hidden, this.outputs, this.matrices, this.activations, this.learningRate);
+    }
+
+    /**
+     * Constructor used by clone function.
+     *
+     * @param inputs       input neurons
+     * @param hidden       hidden neurons
+     * @param outputs      output neurons
+     * @param matrices     matrices of weights and biases
+     * @param activations  activations
+     * @param learningRate learning rate
+     */
+    private NeuralNetwork(int inputs, int hidden, int outputs, DoubleMatrix[] matrices, DoubleMatrix[] activations, double learningRate) {
+        this.inputs = inputs;
+        this.hidden = hidden;
+        this.outputs = outputs;
+        this.matrices = matrices.clone();
+        this.activations = activations.clone();
+        this.learningRate = learningRate;
+    }
+
+    /**
+     * This function initializes all weights and biases to random values.
+     */
+    private DoubleMatrix[] initializeRandomMatrix(int length) {
+        DoubleMatrix[] res = new DoubleMatrix[length];
+        res[0] = DoubleMatrix.rand(this.hidden, this.inputs + 1);
+        for (int pointer = 1; pointer < length - 1; pointer++) {
+            res[pointer] = DoubleMatrix.rand(this.hidden, this.hidden + 1);
+        }
+        res[length - 1] = DoubleMatrix.rand(this.outputs, this.hidden + 1);
+        return res;
+    }
+
+    /**
+     * This function initializes all weights and biases to zeros.
+     */
+    private DoubleMatrix[] initializeZeroMatrix(int length) {
+        DoubleMatrix[] res = new DoubleMatrix[length];
+        res[0] = DoubleMatrix.zeros(this.hidden, this.inputs + 1);
+        for (int pointer = 1; pointer < length - 1; pointer++) {
+            res[pointer] = DoubleMatrix.zeros(this.hidden, this.hidden + 1);
+        }
+        res[length - 1] = DoubleMatrix.zeros(this.outputs, this.hidden + 1);
+        return res;
+    }
 
     /**
      * This function is used to get a prediction from a matrix of inputs
      *
      * @param inputs matrix of input neurons activations
      * @return matrix of outputs activations
-     * @throws NeuralNetworkException if inputs are not of the right dimension.
      */
-    private DoubleMatrix guess(DoubleMatrix inputs) throws NeuralNetworkException {
-        if (inputs.columns != 1 || inputs.rows != this.inputs)
-            throw new NeuralNetworkException("Wrong inputs dimension.");
+    private DoubleMatrix guess(DoubleMatrix inputs) {
         this.activations[0] = inputs;
         for (int pointer = 0; pointer < this.matrices.length; pointer++) {
             inputs = DoubleMatrix.concatVertically(inputs, DoubleMatrix.ones(1));
@@ -96,28 +164,12 @@ public class NeuralNetwork {
     }
 
     /**
-     * This function is used to train the neural network from a list of inputs and an expected output.
-     *
-     * @param inputs list of inputs
-     * @param answer list of expected outputs
-     * @throws NeuralNetworkException if inputs or answer is wrongly dimensioned.
-     */
-    public void train(double[] inputs, double[] answer) throws NeuralNetworkException {
-        if (inputs.length != this.inputs || answer.length != this.outputs)
-            throw new NeuralNetworkException("Wrong lengths.");
-        train(new DoubleMatrix(inputs), new DoubleMatrix(answer));
-    }
-
-    /**
      * This function is used to train the neural network from a matrix of inputs and an expected output.
      *
      * @param inputs matrix of inputs
      * @param answer matrix of expected outputs
-     * @throws NeuralNetworkException if inputs or answer is wrongly dimensioned.
      */
-    private void train(DoubleMatrix inputs, DoubleMatrix answer) throws NeuralNetworkException {
-        if (inputs.rows != this.inputs || inputs.columns != 1 || answer.rows != this.outputs || answer.columns != 1)
-            throw new NeuralNetworkException("Wrong dimensions.");
+    private DoubleMatrix[] train(DoubleMatrix inputs, DoubleMatrix answer) {
         DoubleMatrix guess = this.guess(inputs);
         DoubleMatrix outputErrors = answer.sub(guess);
         DoubleMatrix[] changes = new DoubleMatrix[this.matrices.length];
@@ -151,7 +203,67 @@ public class NeuralNetwork {
             // Use input error as output error for next loop
             outputErrors = input_errors;
         }
+        for (DoubleMatrix change : changes) {
+            change.mul(this.learningRate);
+        }
+        return changes;
+    }
+
+    /**
+     * This function is used to add the calculated gradient descent on the weights and biases.
+     *
+     * @param changes Array of DoubleMatrices.
+     */
+    private void saveGradientDescent(DoubleMatrix[] changes) {
         for (int i = 0; i < this.matrices.length; i++)
-            this.matrices[i] = this.matrices[i].add(changes[i].mul(this.learningRate));
+            this.matrices[i].addi(changes[i]);
+    }
+
+    /**
+     * This function is used to check if an input matrix is valid.
+     *
+     * @param inputs input matrix.
+     * @throws NeuralNetworkException If the inputs are wrongly dimensioned.
+     */
+    private void checkInput(DoubleMatrix inputs) throws NeuralNetworkException {
+        if (inputs.length != this.inputs || !inputs.isColumnVector())
+            throw new NeuralNetworkException("Inputs invalid.");
+    }
+
+    /**
+     * This function is used to check if an expected output matrix is valid.
+     *
+     * @param outputs expected output matrix.
+     * @throws NeuralNetworkException If the expected outputs are wrongly dimensioned.
+     */
+    private void checkOutput(DoubleMatrix outputs) throws NeuralNetworkException {
+        if (outputs.length != this.outputs || !outputs.isColumnVector())
+            throw new NeuralNetworkException("Outputs invalid.");
+    }
+
+    /**
+     * This function is used to check if a training data object is correct for the neural network.
+     *
+     * @param trainingData Training Data.
+     * @throws NeuralNetworkException If the Training Data is invalid.
+     */
+    private void checkTrainingData(TrainingData trainingData) throws NeuralNetworkException {
+        try {
+            this.checkInput(trainingData.getInputs());
+            this.checkOutput(trainingData.getExpected());
+        } catch (NeuralNetworkException e) {
+            throw new NeuralNetworkException("Training data invalid.");
+        }
+    }
+
+    /**
+     * This function is used to check if an array of training data objects is correct for the neural network.
+     *
+     * @param trainingData Training Datum.
+     * @throws NeuralNetworkException If the Training Datum is invalid.
+     */
+    private void checkTrainingDatum(TrainingData[] trainingData) throws NeuralNetworkException {
+        for (TrainingData td : trainingData)
+            this.checkTrainingData(td);
     }
 }
